@@ -1,5 +1,6 @@
 -- =====================================================================================
 --  ARQUIVO 5: CARGA DA FATO_PEDIDO
+
 -- =====================================================================================
 --  Rode depois de: 01-carga-staging.sql, 02-dimensoes-prontas.sql e
 --  04-dimensoes-customizadas.sql
