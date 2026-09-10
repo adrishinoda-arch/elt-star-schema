@@ -27,6 +27,7 @@
 - [14. Tecnologias Utilizadas](#14-tecnologias-utilizadas)
 - [15. Vídeo de Apresentação](#15-vídeo-de-apresentação)
 - [16. Autora](#16-autora)
+- [PRD (complementar)](docs/PRD.md) — escopo, personas e aceite; números e construção ficam neste README
 
 ---
 
@@ -202,6 +203,7 @@ elt-star-schema/
 │   └── diagrama-estrela.png               # Diagrama do modelo estrela
 │
 └── docs/                                  # Documentação complementar
+    └── PRD.md                             # Product Requirements Document
 ```
 
 ---
