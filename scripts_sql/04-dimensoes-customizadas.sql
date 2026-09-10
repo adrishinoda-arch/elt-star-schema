@@ -1,25 +1,25 @@
 -- =====================================================================================
---  ARQUIVO 4: DIMENSÕES CUSTOMIZADAS + TABELA PONTE
+--  ARQUIVO 4: DIMENSOES CUSTOMIZADAS + TABELA PONTE
+--  Case: Pata Amiga  |  PostgreSQL 16+
 -- =====================================================================================
---  Rode depois de: 01-carga-staging.sql, 02-dimensoes-prontas.sql e 03-diagnostico.sql
+--  Rode depois de: 01-carga-staging.sql e 02-dimensoes-prontas.sql
 --
---  Este arquivo cria e carrega as dimensões que faltam no modelo estrela:
---    1. dim_categoria      - 38 linhas (37 grafias + linha -1)
---    2. dim_praca          - 13 linhas (12 pracas + linha -1)
---    3. bridge_loja_praca  - 48 linhas (loja x praca com fator de rateio)
+--  Este arquivo cria e carrega:
+--    1. dim_categoria      (38 linhas: 37 grafias + a linha -1)
+--    2. dim_praca          (13 linhas: 12 pracas + a linha -1)
+--    3. bridge_loja_praca  (48 linhas: uma loja x uma praca)
 --
---  Transformacões aplicadas:
---    - De-para de categorias com CASE WHEN na ordem lógica correta
---      (MED antes de RA para "Racão Medicamentosa" ir para Medicamento);
---    - UPPER + TRANSLATE para padronizar maiúsculas e remover acentos;
---    - Conversão de domicilios_com_pet de texto para inteiro;
---    - Conversão de percentual de público de texto para decimal;
---    - Linha -1 em todas as dimensões para evitar FK nula na fato.
+--  Regras aplicadas:
+--    - Toda dimensao tem a linha -1 = "Nao Informado";
+--    - A grafia crua e guardada em categoria_origem;
+--    - O de-para de categoria segue a ORDEM LOGICA do documento;
+--    - A comparacao usa UPPER + TRANSLATE (sem acento), cobrindo 18 acentos
+--      (maiusculos e minusculos), incluindo cedilha;
+--    - O fator de publico da ponte soma 1,00 por loja.
 -- =====================================================================================
 
 -- =====================================================================================
 --  DIM_CATEGORIA
---  grao: UMA GRAFIA DA ORIGEM
 -- =====================================================================================
 DROP TABLE IF EXISTS dim_categoria;
 CREATE TABLE dim_categoria (
@@ -29,39 +29,36 @@ CREATE TABLE dim_categoria (
     grupo_categoria  VARCHAR(20)
 );
 
--- Linha -1
 INSERT INTO dim_categoria (sk_categoria, categoria_origem, nome_categoria, grupo_categoria)
 VALUES (-1, 'Nao Informado', 'Nao Informado', 'Nao Informado');
 
--- Carga com o de-para na ordem lógica correta
 INSERT INTO dim_categoria (categoria_origem, nome_categoria, grupo_categoria)
 SELECT DISTINCT
     "CategoriaProduto",
     CASE
-        WHEN UPPER("CategoriaProduto") LIKE '%MED%' THEN 'Medicamento'
-        WHEN UPPER("CategoriaProduto") LIKE '%PETISC%' THEN 'Petisco'
-        WHEN UPPER("CategoriaProduto") LIKE '%RA%' THEN 'Racao'
-        WHEN UPPER("CategoriaProduto") LIKE '%HIG%' THEN 'Higiene'
-        WHEN UPPER("CategoriaProduto") LIKE '%BRINQ%' THEN 'Brinquedo'
-        WHEN UPPER("CategoriaProduto") LIKE '%ACESS%' THEN 'Acessorio'
-        WHEN UPPER("CategoriaProduto") LIKE '%SERV%' THEN 'Servico'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%MED%' THEN 'Medicamento'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%PETISC%' THEN 'Petisco'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%RA%' THEN 'Racao'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%HIG%' THEN 'Higiene'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%BRINQ%' THEN 'Brinquedo'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%ACESS%' THEN 'Acessorio'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%SERV%' THEN 'Servico'
         ELSE 'Nao Informado'
     END AS nome_categoria,
     CASE
-        WHEN UPPER("CategoriaProduto") LIKE '%MED%' THEN 'Saude e Higiene'
-        WHEN UPPER("CategoriaProduto") LIKE '%PETISC%' THEN 'Alimentacao'
-        WHEN UPPER("CategoriaProduto") LIKE '%RA%' THEN 'Alimentacao'
-        WHEN UPPER("CategoriaProduto") LIKE '%HIG%' THEN 'Saude e Higiene'
-        WHEN UPPER("CategoriaProduto") LIKE '%BRINQ%' THEN 'Bem-estar'
-        WHEN UPPER("CategoriaProduto") LIKE '%ACESS%' THEN 'Bem-estar'
-        WHEN UPPER("CategoriaProduto") LIKE '%SERV%' THEN 'Bem-estar'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%MED%' THEN 'Saude e Higiene'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%PETISC%' THEN 'Alimentacao'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%RA%' THEN 'Alimentacao'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%HIG%' THEN 'Saude e Higiene'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%BRINQ%' THEN 'Bem-estar'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%ACESS%' THEN 'Bem-estar'
+        WHEN UPPER(TRANSLATE("CategoriaProduto", U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%SERV%' THEN 'Bem-estar'
         ELSE 'Nao Informado'
     END AS grupo_categoria
 FROM stg_pedido;
 
 -- =====================================================================================
 --  DIM_PRACA
---  grao: UMA PRACA DE ATENDIMENTO
 -- =====================================================================================
 DROP TABLE IF EXISTS dim_praca;
 CREATE TABLE dim_praca (
@@ -72,11 +69,9 @@ CREATE TABLE dim_praca (
     domicilios_com_pet INT
 );
 
--- Linha -1
 INSERT INTO dim_praca (sk_praca, cod_praca, nome_praca, regional, domicilios_com_pet)
 VALUES (-1, 'N/I', 'Nao Informado', 'Nao Informado', NULL);
 
--- Carga da dim_praca
 INSERT INTO dim_praca (cod_praca, nome_praca, regional, domicilios_com_pet)
 SELECT DISTINCT
     "CodPraca",
@@ -87,7 +82,6 @@ FROM stg_loja_praca;
 
 -- =====================================================================================
 --  BRIDGE_LOJA_PRACA
---  grao: UMA LOJA x UMA PRACA
 -- =====================================================================================
 DROP TABLE IF EXISTS bridge_loja_praca;
 CREATE TABLE bridge_loja_praca (
@@ -97,7 +91,6 @@ CREATE TABLE bridge_loja_praca (
     PRIMARY KEY (cod_loja, sk_praca)
 );
 
--- Carga da ponte
 INSERT INTO bridge_loja_praca (cod_loja, sk_praca, fator_publico)
 SELECT
     "CodLoja",
@@ -107,7 +100,7 @@ FROM stg_loja_praca s
 JOIN dim_praca d ON d.cod_praca = s."CodPraca";
 
 -- =====================================================================================
---  CONFERÊNCIA
+--  CONFERENCIA
 -- =====================================================================================
 SELECT 'dim_categoria' AS tabela, COUNT(*) AS linhas, '38' AS esperado FROM dim_categoria
 UNION ALL SELECT 'dim_praca', COUNT(*), '13' FROM dim_praca

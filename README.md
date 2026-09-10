@@ -26,7 +26,7 @@
 - [13. Segurança e LGPD](#13-segurança-e-lgpd)
 - [14. Tecnologias Utilizadas](#14-tecnologias-utilizadas)
 - [15. Vídeo de Apresentação](#15-vídeo-de-apresentação)
-- [16. Autor](#16-autor)
+- [16. Autora](#16-autora)
 
 ---
 
@@ -152,10 +152,10 @@ staging (sujas) → dimensões prontas + customizadas + ponte → fato → anál
 | `::date` nos marcos | Formato ISO |
 | `CASE WHEN` com MED antes de RA | "Ração Medicamentosa" é medicamento |
 | `CASE WHEN` com WHATS antes de APP | "WHATSAPP" contém "APP" |
-| `UPPER` + `UNACCENT` + `REPLACE` no nome da loja | Normalizar antes do lookup |
+| `UPPER` + `TRANSLATE` (36 caracteres, incl. cedilha) + `REPLACE` no nome da loja | Normalizar antes do lookup |
 | `COALESCE(..., -1)` nas FKs | Linha -1 em vez de FK nula |
 | Marco em branco → NULL nos dias | `AVG` ignora NULL, mas soma 0 |
-| `100.0` nas divisões | Evitar truncamento de inteiro |
+| `100.0` nas divisões | Evitar truncamento de inteiro. No PostgreSQL, `INT / INT` retorna `INT` (trunca). Usar `100.0` (com ponto) força o resultado decimal — sem isso, os percentuais da P2, P3 e P4 sairiam zerados. |
 | `LEFT JOIN` em vez de subconsulta | Seguir o padrão do documento |
 
 ### 3.3 Decisões de Segurança e Boas Práticas
@@ -169,11 +169,15 @@ staging (sujas) → dimensões prontas + customizadas + ponte → fato → anál
 | Subconsulta só nas análises | Documento permite |
 | Constraints FK formais | Garantir integridade referencial |
 
-### 3.4 Decisão sobre `UNACCENT` vs `TRANSLATE`
+### 3.4 Decisão sobre `TRANSLATE` com Unicode escapes
 
 - O documento sugere `TRANSLATE` para remover acentos;
-- Usamos `UNACCENT` (extensão oficial) por ser mais portável e não exigir caracteres acentuados no arquivo (evita erro de codificação);
-- O resultado funcional é o mesmo.
+- Usamos `TRANSLATE` com **Unicode escapes** (`U&'\00C1...'`) em vez de acentos literais, para:
+  - Seguir o documento (sem precisar de extensão `unaccent`);
+  - Evitar erros de codificação (o arquivo fica 100% ASCII);
+  - Garantir portabilidade em qualquer ambiente PostgreSQL;
+- A lista cobre **36 caracteres** (18 maiúsculos + 18 minúsculos), incluindo **cedilha** (`Ç`/`ç`);
+- O resultado funcional é idêntico ao `UNACCENT`, mas sem dependência externa.
 
 ---
 
@@ -186,16 +190,16 @@ elt-star-schema/
 ├── .gitignore                             # Arquivos ignorados pelo Git
 │
 ├── scripts_sql/                           # Scripts SQL na ordem de execução
-│   ├── 00-conferencia.sql                 # Validação (roda entre etapas)
-│   ├── 01-carga-staging.sql               # Carga das 3 tabelas de origem
-│   ├── 02-dimensoes-prontas.sql           # dim_tempo e dim_loja + criação das demais
-│   ├── 03-diagnostico.sql                 # Coleta dos números da origem
-│   ├── 04-dimensoes-customizadas.sql      # dim_categoria, dim_praca, bridge
-│   ├── 05-carga-fato.sql                  # Carga da fato_pedido (4.044 linhas)
-│   └── 06-analises.sql                    # Consultas das 5 perguntas de negócio
+│   ├── 00-conferencia.sql                 # Auxiliar: validação entre etapas
+│   ├── 01-carga-staging.sql               # Pipeline: carga das 3 tabelas de origem
+│   ├── 02-dimensoes-prontas.sql           # Pipeline: dim_tempo e dim_loja + criação das demais
+│   ├── 03-diagnostico.sql                 # Auxiliar: raio-X da origem
+│   ├── 04-dimensoes-customizadas.sql      # Pipeline: dim_categoria, dim_praca, bridge
+│   ├── 05-carga-fato.sql                  # Pipeline: carga da fato_pedido (4.044 linhas)
+│   └── 06-analises.sql                    # Pipeline: consultas das 5 perguntas de negócio
 │
-├── graficos/                              # Imagens e diagramas
-│   └── diagrama_estrela.png               # Diagrama do modelo estrela
+├── assets/                                # Imagens e diagramas
+│   └── diagrama-estrela.png               # Diagrama do modelo estrela
 │
 └── docs/                                  # Documentação complementar
 ```
@@ -212,22 +216,30 @@ elt-star-schema/
 
 ### 5.2. Ordem de execução
 
-Os scripts devem ser executados **na ordem numérica**. Cada um depende do anterior.
+**Pipeline de construção do modelo** (executar na ordem):
 
 | Ordem | Script | Banco | O que faz |
 |-------|--------|-------|-----------|
 | 1º | `01-carga-staging.sql` | `postgres` | Cria o banco `dw_pata_amiga` e carrega as 3 tabelas de staging |
 | 2º | `02-dimensoes-prontas.sql` | `dw_pata_amiga` | Popula `dim_tempo` (236) e `dim_loja` (33); cria as demais tabelas vazias |
-| 3º | `03-diagnostico.sql` | `dw_pata_amiga` | Coleta os números do diagnóstico da origem |
-| 4º | `04-dimensoes-customizadas.sql` | `dw_pata_amiga` | Cria e carrega `dim_categoria` (38), `dim_praca` (13) e `bridge_loja_praca` (48) |
-| 5º | `05-carga-fato.sql` | `dw_pata_amiga` | Cria e carrega a `fato_pedido` (4.044 linhas) |
-| 6º | `06-analises.sql` | `dw_pata_amiga` | Responde as 5 perguntas de negócio |
+| 3º | `04-dimensoes-customizadas.sql` | `dw_pata_amiga` | Cria e carrega `dim_categoria` (38), `dim_praca` (13) e `bridge_loja_praca` (48) |
+| 4º | `05-carga-fato.sql` | `dw_pata_amiga` | Cria e carrega a `fato_pedido` (4.044 linhas) |
+| 5º | `06-analises.sql` | `dw_pata_amiga` | Responde as 5 perguntas de negócio |
 
-O script `00-conferencia.sql` **não faz parte do pipeline** — é um arquivo de validação que pode ser executado **entre as etapas** para conferir se os números estão corretos.
+**Scripts auxiliares** (não fazem parte do pipeline — podem rodar a qualquer momento, sem risco de quebrar o modelo):
+
+| Script | Quando rodar | O que faz |
+|--------|--------------|-----------|
+| `00-conferencia.sql` | Entre etapas | Valida se os números esperados batem antes de avançar |
+| `03-diagnostico.sql` | Após o `01` | Raio-X da origem: coleta as contagens que sustentam a [seção 6](#6-diagnóstico-da-origem) |
+
+> **Sobre os scripts auxiliares:**
+>
+> Nenhum dos dois cria ou altera tabelas do modelo. O `00-conferencia.sql` é um **validador** — roda entre as etapas para conferir se os números batem com o esperado. O `03-diagnostico.sql` é um **raio-X da origem**: percorre as três tabelas de *staging* e devolve as contagens que sustentam o diagnóstico deste README — quantas grafias distintas de loja e de categoria existem, quantos pedidos vieram sem código ou sem nome de loja, quantos marcos de processo estão em branco. É o que dá base numérica à [seção 6](#6-diagnóstico-da-origem) e permite afirmar que os defeitos plantados são reais, não suposições.
 
 ### 5.3. Observação sobre a numeração dos scripts
 
-O documento original numera os scripts de `00` a `05`. Neste repositório, foi adicionado o script `03-diagnostico.sql`, deslocando a numeração:
+O documento original numera os scripts do pipeline de `00` a `05`. Neste repositório, foi adicionado o script **auxiliar** `03-diagnostico.sql` (que não faz parte do pipeline, mas ocupa o número 3 por ordem lógica de execução). Isso deslocou a numeração dos scripts seguintes:
 
 | Documento original | Neste repositório |
 |--------------------|-------------------|
@@ -240,13 +252,17 @@ O conteúdo é o mesmo — apenas a numeração foi deslocada.
 ### 5.4. Execução via psql
 
 ```powershell
+# Pipeline de construção
 psql -U postgres -d postgres -f "scripts_sql/01-carga-staging.sql"
 
 psql -U postgres -d dw_pata_amiga -f "scripts_sql/02-dimensoes-prontas.sql"
-psql -U postgres -d dw_pata_amiga -f "scripts_sql/03-diagnostico.sql"
 psql -U postgres -d dw_pata_amiga -f "scripts_sql/04-dimensoes-customizadas.sql"
 psql -U postgres -d dw_pata_amiga -f "scripts_sql/05-carga-fato.sql"
 psql -U postgres -d dw_pata_amiga -f "scripts_sql/06-analises.sql"
+
+# Scripts auxiliares (opcionais)
+psql -U postgres -d dw_pata_amiga -f "scripts_sql/03-diagnostico.sql"
+psql -U postgres -d dw_pata_amiga -f "scripts_sql/00-conferencia.sql"
 ```
 
 ### 5.5. Execução via pgAdmin
@@ -255,17 +271,21 @@ psql -U postgres -d dw_pata_amiga -f "scripts_sql/06-analises.sql"
 2. Abra o **Query Tool** no banco `postgres`;
 3. Execute o `01-carga-staging.sql` (**F5**);
 4. Atualize a árvore e localize o banco `dw_pata_amiga`;
-5. Abra o **Query Tool** nele para os scripts 02 a 06.
+5. Abra o **Query Tool** nele para os scripts 02, 04, 05 e 06.
 
 > **Atenção:** o script `01` contém o comando `\c dw_pata_amiga`, que só funciona no `psql`. No pgAdmin, remova essa linha ou execute em duas partes (criação do banco, depois carga).
 
 ### 5.6. Validação
 
-Após cada etapa, rode o bloco correspondente do `00-conferencia.sql` para conferir se os números batem. Os 16 números de conferência estão na [seção 10](#10-validações-realizadas).
+Após cada etapa, rode o bloco correspondente do `00-conferencia.sql` para conferir se os números batem com o esperado. Os 16 números de conferência estão na [seção 10](#10-validações-realizadas).
+
+O `03-diagnostico.sql` gera as contagens da [seção 6](#6-diagnóstico-da-origem) — recomenda-se rodá-lo após o `01`, quando a *staging* já está carregada.
 
 ---
 
 ## 6. Diagnóstico da Origem
+
+Os números abaixo vêm do script `03-diagnostico.sql`, que percorre as três tabelas de *staging* sem alterá-las. Ele é o raio-X que sustenta todo o tratamento aplicado nas etapas seguintes.
 
 ### 6.1. Números gerais
 
@@ -334,9 +354,9 @@ Após cada etapa, rode o bloco correspondente do `00-conferencia.sql` para confe
 | Colunas em texto | `CAST` / `TO_TIMESTAMP` / `::date` / `::int` | 04 e 05 |
 | Nomes fora de snake_case | Uso entre aspas duplas (`"Cod Loja"`) | 04 e 05 |
 | Dois formatos de data | `TO_TIMESTAMP(..., 'MM/DD/YYYY HH12:MI AM')` e `::date` | 05 |
-| 37 grafias de categoria | `CASE WHEN` (MED antes de RA) + grafia crua em `categoria_origem` | 04 |
+| 37 grafias de categoria | `UPPER` + `TRANSLATE` (36 caracteres, incl. cedilha) + `CASE WHEN` (MED antes de RA) + grafia crua em `categoria_origem` | 04 |
 | Pegadinha "Ração Medicamentosa" | Ordem do CASE: MED primeiro | 04 |
-| 128 grafias de loja | `UPPER` + `UNACCENT` + `REPLACE('/SC')` + `REPLACE('  ', ' ')` + CASE para 3 erros | 05 |
+| 128 grafias de loja | `UPPER` + `TRANSLATE` (36 caracteres, incl. cedilha) + `REPLACE('/SC')` + `REPLACE('  ', ' ')` + CASE para 3 erros | 05 |
 | 1.575 sem `Cod Loja` | JOIN pela `chave_loja` (derivada do nome) | 05 |
 | 3 sem nome de loja | `COALESCE(..., -1)` → linha -1 | 05 |
 | 17 grafias de desconto | `CASE WHEN` → Sim / Nao / Nao Informado | 05 |
@@ -377,6 +397,7 @@ Após cada etapa, rode o bloco correspondente do `00-conferencia.sql` para confe
 
 **Transformações aplicadas:**
 - De-para com `CASE WHEN` na ordem lógica correta (MED antes de RA);
+- Comparação com `UPPER` + `TRANSLATE` (36 caracteres, incl. cedilha);
 - Grafia crua preservada em `categoria_origem` para o JOIN da fato.
 
 **Linha -1:** `sk_categoria = -1` (`Nao Informado`).
@@ -455,7 +476,7 @@ Após cada etapa, rode o bloco correspondente do `00-conferencia.sql` para confe
 |---------------|----------------|------------------|
 | Datas do pedido | `TO_TIMESTAMP(..., 'MM/DD/YYYY HH12:MI AM')` → `TO_CHAR(..., 'YYYYMMDD')::int` | `"DtHoraPedido"`, `"DtHoraIntegracaoERP"` |
 | Datas dos marcos | `<coluna>::date` | 4 marcos |
-| Nome da loja | `UPPER` + `UNACCENT` + `REPLACE('/SC')` + `REPLACE('  ', ' ')` + `CASE` para 3 erros | `"Loja-Nome"` |
+| Nome da loja | `UPPER` + `TRANSLATE` (36 caracteres, incl. cedilha) + `REPLACE('/SC')` + `REPLACE('  ', ' ')` + `CASE` para 3 erros | `"Loja-Nome"` |
 | Categoria | `LEFT JOIN dim_categoria` pela grafia crua | `"CategoriaProduto"` |
 | Valores monetários | Regra dos números | `"ValorLiquidoPedido(R$)"` |
 | Quantidade de itens | `CAST` com vazio/`-` → NULL | `"QTD.Itens"` |
@@ -500,7 +521,7 @@ A `stg_pedido` traz outras colunas que **não são usadas por nenhuma das 5 perg
 | `"Valor Frete (R$)"` | Nenhuma pergunta usa |
 | `"FormaPagamento"`, `"Bairro Entrega"`, `"TransportadoraResponsavel"`, `"SituacaoPedido"`, `"OBS"` | Não usados nas análises |
 
-**Escolher o que **não** entra na fato também é modelagem.** Há apenas UMA coluna de dinheiro (`vl_liquido`), não três.
+Escolher o que **não** entra na fato também é modelagem. Há apenas UMA coluna de dinheiro (`vl_liquido`), não três.
 
 ### 8.7. Validações
 
@@ -824,12 +845,13 @@ Todos os 16 números de conferência do documento bateram:
 
 | Tecnologia | Motivo |
 |------------|--------|
-| Python | Não obrigatório; SQL resolve o pipeline inteiro |
+| Python | Não obrigatório; SQL resolve o pipeline inteiro. Uma automação chegou a ser esboçada, mas foi removida para manter o projeto aderente à lista fechada de comandos do documento e evitar dependências externas. |
 | CTE / window function | Fora da lista fechada do documento |
 | Triggers / procedures | Não necessários |
 | Views / tabelas temporárias | Sem camada intermediária |
 | Machine Learning | Análise descritiva é suficiente para as 5 perguntas |
 | Índices | Não exigidos pelo escopo |
+| Extensão `unaccent` | Substituída por `TRANSLATE` com Unicode escapes (portabilidade) |
 
 ---
 
@@ -845,7 +867,8 @@ Todos os 16 números de conferência do documento bateram:
   5. O que os dados NÃO permitem afirmar e melhorias futuras.
 
 ---
-## 15. Autora
+
+## 16. Autora
 
 | | |
 |---|---|
@@ -855,5 +878,8 @@ Todos os 16 números de conferência do documento bateram:
 | **GitHub** | [adrishinoda-arch](https://github.com/adrishinoda-arch) |
 | **Instituição** | SENAI/SC — Programa SCTEC |
 | **Ano** | 2026 |
+
+---
+
 
 

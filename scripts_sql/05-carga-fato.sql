@@ -1,6 +1,6 @@
 -- =====================================================================================
 --  ARQUIVO 5: CARGA DA FATO_PEDIDO
-
+--  Case: Pata Amiga  |  PostgreSQL 16+
 -- =====================================================================================
 --  Rode depois de: 01-carga-staging.sql, 02-dimensoes-prontas.sql e
 --  04-dimensoes-customizadas.sql
@@ -9,13 +9,12 @@
 --  Grao: 1 linha = 1 pedido.
 --
 --  Regras:
---    - Um unico INSERT ... SELECT, sem subconsulta: so SELECT, JOIN, LEFT JOIN e CASE WHEN;
+--    - Um unico INSERT ... SELECT, sem subconsulta;
 --    - A limpeza fica na dimensao, e a fato apenas procura a linha certa;
 --    - Nenhuma FK fica nula: quando o dado falta, aponta para a linha -1;
---    - As cinco colunas de dias sao calculadas UMA vez aqui na carga.
+--    - As cinco colunas de dias sao calculadas UMA vez aqui na carga;
+--    - A comparacao usa UPPER + TRANSLATE com 36 caracteres (inclui cedilha).
 -- =====================================================================================
-
-CREATE EXTENSION IF NOT EXISTS unaccent;
 
 DROP TABLE IF EXISTS fato_pedido;
 CREATE TABLE fato_pedido (
@@ -35,10 +34,10 @@ CREATE TABLE fato_pedido (
     dias_nota_despacho        INT,
     dias_despacho_entrega     INT,
     dias_total_ate_entrega    INT,
-    CONSTRAINT fk_fato_tempo_pedido FOREIGN KEY (sk_tempo_pedido) REFERENCES dim_tempo(sk_tempo),
+    CONSTRAINT fk_fato_tempo_pedido  FOREIGN KEY (sk_tempo_pedido)  REFERENCES dim_tempo(sk_tempo),
     CONSTRAINT fk_fato_tempo_entrega FOREIGN KEY (sk_tempo_entrega) REFERENCES dim_tempo(sk_tempo),
-    CONSTRAINT fk_fato_loja FOREIGN KEY (sk_loja) REFERENCES dim_loja(sk_loja),
-    CONSTRAINT fk_fato_categoria FOREIGN KEY (sk_categoria) REFERENCES dim_categoria(sk_categoria)
+    CONSTRAINT fk_fato_loja          FOREIGN KEY (sk_loja)          REFERENCES dim_loja(sk_loja),
+    CONSTRAINT fk_fato_categoria     FOREIGN KEY (sk_categoria)     REFERENCES dim_categoria(sk_categoria)
 );
 
 INSERT INTO fato_pedido (
@@ -112,23 +111,27 @@ SELECT
         ELSE s."DtEntregaCliente"::date - TO_TIMESTAMP(s."DtHoraIntegracaoERP", 'MM/DD/YYYY HH12:MI AM')::date
     END
 FROM stg_pedido s
-LEFT JOIN dim_categoria dc ON dc.categoria_origem = s."CategoriaProduto"
-LEFT JOIN dim_loja dl ON dl.chave_loja = 
-    UPPER(
-        UNACCENT(
-            REPLACE(
+LEFT JOIN dim_categoria dc 
+    ON dc.categoria_origem = s."CategoriaProduto"
+LEFT JOIN dim_loja dl 
+    ON dl.chave_loja = 
+        UPPER(
+            TRANSLATE(
                 REPLACE(
-                    CASE
-                        WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA BLUMENAL CENTRO' THEN 'PATA AMIGA BLUMENAU CENTRO'
-                        WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA FLORIPA NORTE' THEN 'PATA AMIGA FLORIANOPOLIS NORTE'
-                        WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA JGUA DO SUL' THEN 'PATA AMIGA JARAGUA DO SUL'
-                        ELSE TRIM(s."Loja-Nome")
-                    END,
-                    '/SC', ''
+                    REPLACE(
+                        CASE
+                            WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA BLUMENAL CENTRO' THEN 'PATA AMIGA BLUMENAU CENTRO'
+                            WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA FLORIPA NORTE' THEN 'PATA AMIGA FLORIANOPOLIS NORTE'
+                            WHEN UPPER(TRIM(s."Loja-Nome")) = 'PATA AMIGA JGUA DO SUL' THEN 'PATA AMIGA JARAGUA DO SUL'
+                            ELSE TRIM(s."Loja-Nome")
+                        END,
+                        '/SC', ''
+                    ),
+                    '  ', ' '
                 ),
-                '  ', ' '
+                U&'\00C1\00C9\00CD\00D3\00DA\00C0\00C8\00CC\00D2\00D9\00C2\00CA\00CE\00D4\00DB\00C3\00D5\00C7\00E1\00E9\00ED\00F3\00FA\00E0\00E8\00EC\00F2\00F9\00E2\00EA\00EE\00F4\00FB\00E3\00F5\00E7',
+                'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc'
             )
-        )
-    );
+        );
 
 SELECT COUNT(*) AS linhas, '4044' AS esperado FROM fato_pedido;
