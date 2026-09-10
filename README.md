@@ -33,3 +33,27 @@
 - **1.575 pedidos sem código de loja** (~39%): o código será recuperado pelo nome da loja;
 - **3 pedidos sem nome de loja**: irão para a linha -1 na dimensão loja;
 - **Marcos em branco**: representam processos ainda em aberto (não são erros), e serão tratados como NULL nos campos de dias.
+
+---
+
+## Dimensões Customizadas
+
+### O que foi criado
+
+| Tabela | Linhas | Descrição |
+|--------|--------|-----------|
+| dim_categoria | 38 | 37 grafias + linha -1 |
+| dim_praca | 13 | 12 praças + linha -1 |
+| bridge_loja_praca | 48 | Relação loja × praça com fator de rateio |
+
+### Transformações aplicadas
+
+- **dim_categoria**: de-para de categorias com CASE WHEN na ordem lógica correta (MED antes de RA para "Ração Medicamentosa" ir para Medicamento);
+- **dim_praca**: conversão de domicilios_com_pet de texto para inteiro (remoção do ponto de milhar);
+- **bridge_loja_praca**: conversão do percentual de público de texto para decimal (numeric(6,4)).
+
+### Validações
+
+- Soma do fator de público por loja = 1,00;
+- PK composta na ponte: (cod_loja, sk_praca);
+- Linha -1 presente em todas as dimensões.
