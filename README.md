@@ -840,7 +840,6 @@ Todos os 16 números de conferência do documento bateram:
 |------------|-----|
 | **PostgreSQL 16+** | SGBD da solução |
 | **SQL puro** | Todo o pipeline e análises |
-| **Draw.io** | Diagrama do modelo estrela |
 | **Git / GitHub** | Versionamento e entrega |
 
 ### O que NÃO foi usado (e por quê)
