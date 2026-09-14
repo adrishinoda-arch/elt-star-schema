@@ -5,6 +5,8 @@
 ![Status](https://img.shields.io/badge/status-conclu%C3%ADdo-brightgreen)
 ![Licen%C3%A7a](https://img.shields.io/badge/licen%C3%A7a-acad%C3%AAmica-lightgrey)
 
+🎥 **[Assistir ao vídeo de apresentação](https://drive.google.com/file/d/1APtfLKa4w5j5vK7ZtaIyHKhaf61pof-q/view)**
+
 > Pipeline ELT em PostgreSQL que transforma dados sujos de 3 sistemas legados
 > em um modelo dimensional estrela, respondendo 5 perguntas de negócio sobre
 > entregas, faturamento, descontos e expansão de uma rede de 32 pet shops.
@@ -858,7 +860,7 @@ Todos os 16 números de conferência do documento bateram:
 
 ## 15. Vídeo de Apresentação
 
-- **Link do Google Drive:** *(a preencher após a gravação)*
+- **Link do Google Drive:** https://drive.google.com/file/d/1APtfLKa4w5j5vK7ZtaIyHKhaf61pof-q/view
 - **Duração:** até 5 minutos
 - **Conteúdo:**
   1. Objetivo do modelo dimensional (com diagrama);
